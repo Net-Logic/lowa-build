@@ -2,3 +2,4 @@ work/
 out/
 tests/smoke/node_modules/
 tests/smoke/samples/
+.claude/
