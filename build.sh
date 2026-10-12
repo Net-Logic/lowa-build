@@ -149,6 +149,11 @@ step_lo() {
 	return "$rc"
 }
 
+step_collect() {
+	python3 -I "$ROOT/scripts/collect.py" "$ROOT" "$WORK" "$OUT"
+	echo "Engine collected in $OUT"
+}
+
 # Every step in order (runs in the background, see step_all)
 step_run_all() {
 	echo "[$(date -Is)] build $LABEL started"
@@ -156,7 +161,7 @@ step_run_all() {
 	step_fetch
 	step_qt
 	step_lo
-	if declare -F step_collect >/dev/null; then step_collect; fi
+	step_collect
 	echo "[$(date -Is)] build $LABEL finished"
 }
 
@@ -176,6 +181,7 @@ main() {
 		fetch) step_fetch ;;
 		qt) step_qt ;;
 		lo) step_lo ;;
+		collect) step_collect ;;
 		all) step_all ;;
 		_all) step_run_all ;;
 		*) echo "Usage: $0 [all|preflight|image|fetch|qt|lo|collect|status]" >&2; exit 2 ;;
