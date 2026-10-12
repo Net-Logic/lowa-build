@@ -136,6 +136,36 @@ step_qt() {
 	run_step qt build-qt.sh "$(lowa_jobs "$(usable_ram_gb)" "$MAX_JOBS")"
 }
 
+# LibreOffice; after an out-of-memory kill, resume once with a single job (the link alone)
+step_lo() {
+	local jobs rc=0
+	jobs=$(lowa_jobs "$(usable_ram_gb)" "$MAX_JOBS")
+	run_step lo build-lo.sh "$jobs" || rc=$?
+	if [ "$rc" -ne 0 ] && lowa_is_oom_exit "$rc"; then
+		echo "Out of memory with $jobs jobs: resuming with 1 job"
+		run_step lo-retry build-lo.sh 1
+		return
+	fi
+	return "$rc"
+}
+
+# Every step in order (runs in the background, see step_all)
+step_run_all() {
+	echo "[$(date -Is)] build $LABEL started"
+	step_image
+	step_fetch
+	step_qt
+	step_lo
+	if declare -F step_collect >/dev/null; then step_collect; fi
+	echo "[$(date -Is)] build $LABEL finished"
+}
+
+step_all() {
+	step_preflight
+	nohup "$ROOT/build.sh" _all > "$OUT/build.log" 2>&1 &
+	echo "Build started in the background (pid $!). Log: $OUT/build.log  Progress: ./build.sh status"
+}
+
 # Bash reads a script while it runs: everything is parsed before the first step (build.sh is edited
 # while long steps run in the background)
 main() {
@@ -145,6 +175,9 @@ main() {
 		image) step_image ;;
 		fetch) step_fetch ;;
 		qt) step_qt ;;
+		lo) step_lo ;;
+		all) step_all ;;
+		_all) step_run_all ;;
 		*) echo "Usage: $0 [all|preflight|image|fetch|qt|lo|collect|status]" >&2; exit 2 ;;
 	esac
 }
