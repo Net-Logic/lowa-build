@@ -102,8 +102,8 @@ run_step() {
 	rm -f "$WORK/stats/$step.peak" "$WORK/stats/$step.stopped"
 	docker rm -f "$name" >/dev/null 2>&1 || true
 	start=$(date +%s)
-	echo "[$(date -Is)] $step: $jobs jobs, memory ${MEM_LIMIT_GB} GB + swap ${swap} GB"
-	docker run -d --name "$name" --memory="${MEM_LIMIT_GB}g" --memory-swap="$((MEM_LIMIT_GB + swap))g" \
+	echo "[$(date -Is)] $step: $jobs jobs, $MAX_CPUS CPUs, memory ${MEM_LIMIT_GB} GB + swap ${swap} GB"
+	docker run -d --name "$name" --memory="${MEM_LIMIT_GB}g" --memory-swap="$((MEM_LIMIT_GB + swap))g" --cpus="$MAX_CPUS" \
 		--user "$(id -u):$(id -g)" -v "$WORK:/work" -v "$ROOT/scripts:/scripts:ro" -v "$ROOT/patches:/patches:ro" \
 		"${ENV_ARGS[@]}" -e JOBS="$jobs" "$IMAGE" bash "/scripts/$script" >/dev/null
 	watch_container "$name" "$step" &
