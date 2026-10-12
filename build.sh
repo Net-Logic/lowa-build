@@ -74,6 +74,68 @@ step_fetch() {
 	apply_patches "$src" "$ROOT/patches/core"
 }
 
+# Container variables: every pin of versions.env
+ENV_ARGS=()
+for v in $(sed -n 's/^\([A-Z0-9_]*\)=.*/\1/p' "$ROOT/versions.env"); do ENV_ARGS+=(-e "$v"); done
+
+# Every 30 s: record the memory peaks of container $1 into work/stats/$2.peak, stop it if the disk is nearly full
+watch_container() {
+	local name="$1" step="$2" dir
+	while sleep 30; do
+		docker inspect "$name" >/dev/null 2>&1 || return 0
+		dir=$(lowa_cgroup_dir "$name")
+		echo "$(cat "$dir/memory.peak" 2>/dev/null || echo 0) $(cat "$dir/memory.swap.peak" 2>/dev/null || echo 0)" > "$WORK/stats/$step.peak"
+		if lowa_disk_low "$WORK" "$STOP_BELOW_DISK_GB"; then
+			echo "STOPPING $name: less than $STOP_BELOW_DISK_GB GB free on $WORK"
+			echo disk > "$WORK/stats/$step.stopped"
+			docker stop -t 30 "$name" >/dev/null
+			return 0
+		fi
+	done
+}
+
+# Run /scripts/$2 in a memory-capped container lowa-$1 with $3 jobs; returns the container exit code
+# (75 when the disk guard stopped it)
+run_step() {
+	local step="$1" script="$2" jobs="$3" name="lowa-$1" swap start rc watcher peak swappeak
+	swap=$(lowa_container_swap_gb "$(lowa_meminfo_gb SwapFree)")
+	rm -f "$WORK/stats/$step.peak" "$WORK/stats/$step.stopped"
+	docker rm -f "$name" >/dev/null 2>&1 || true
+	start=$(date +%s)
+	echo "[$(date -Is)] $step: $jobs jobs, memory ${MEM_LIMIT_GB} GB + swap ${swap} GB"
+	docker run -d --name "$name" --memory="${MEM_LIMIT_GB}g" --memory-swap="$((MEM_LIMIT_GB + swap))g" \
+		--user "$(id -u):$(id -g)" -v "$WORK:/work" -v "$ROOT/scripts:/scripts:ro" -v "$ROOT/patches:/patches:ro" \
+		"${ENV_ARGS[@]}" -e JOBS="$jobs" "$IMAGE" bash "/scripts/$script" >/dev/null
+	watch_container "$name" "$step" &
+	watcher=$!
+	docker logs -f "$name" 2>&1 || true
+	rc=$(docker wait "$name" 2>/dev/null || echo 1)
+	kill "$watcher" 2>/dev/null || true
+	docker rm "$name" >/dev/null 2>&1 || true
+	read -r peak swappeak < "$WORK/stats/$step.peak" 2>/dev/null || { peak=0; swappeak=0; }
+	printf '{"start": %d, "end": %d, "exit": %d, "jobs": %d, "peak_bytes": %d, "swap_peak_bytes": %d, "stopped": "%s"}\n' \
+		"$start" "$(date +%s)" "$rc" "$jobs" "${peak:-0}" "${swappeak:-0}" "$(cat "$WORK/stats/$step.stopped" 2>/dev/null || true)" \
+		> "$WORK/stats/$step.json"
+	echo "[$(date -Is)] $step: exit $rc"
+	# Stopped by the disk guard: a distinct code, so that the SIGKILL of docker stop is not taken for an out-of-memory kill
+	if [ -f "$WORK/stats/$step.stopped" ]; then
+		echo "$step was stopped: $(cat "$WORK/stats/$step.stopped")"
+		return 75
+	fi
+	return "$rc"
+}
+
+# RAM a step may use: what the host has available, at most the container cap
+usable_ram_gb() {
+	local avail
+	avail=$(lowa_meminfo_gb MemAvailable)
+	[ "$avail" -lt "$MEM_LIMIT_GB" ] && echo "$avail" || echo "$MEM_LIMIT_GB"
+}
+
+step_qt() {
+	run_step qt build-qt.sh "$(lowa_jobs "$(usable_ram_gb)" "$MAX_JOBS")"
+}
+
 # Bash reads a script while it runs: everything is parsed before the first step (build.sh is edited
 # while long steps run in the background)
 main() {
@@ -82,6 +144,7 @@ main() {
 		status) step_status ;;
 		image) step_image ;;
 		fetch) step_fetch ;;
+		qt) step_qt ;;
 		*) echo "Usage: $0 [all|preflight|image|fetch|qt|lo|collect|status]" >&2; exit 2 ;;
 	esac
 }
