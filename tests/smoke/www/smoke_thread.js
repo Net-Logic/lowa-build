@@ -51,6 +51,16 @@ function probe(ctx, writerDoc) {
 	} catch (e) {
 		value.charLocale = 'ERROR ' + message(e);
 	}
+	try {
+		const spell = css.linguistic2.LinguServiceManager.create(ctx).getSpellChecker();
+		const check = (word, lang, country) => spell.isValid(word, new css.lang.Locale({Language: lang, Country: country, Variant: ''}), []);
+		value.spelling = {
+			'fr bonjour': check('bonjour', 'fr', 'FR'), 'fr bonjuor': check('bonjuor', 'fr', 'FR'),
+			'en hello': check('hello', 'en', 'US'), 'en helo': check('helo', 'en', 'US'),
+		};
+	} catch (e) {
+		value.spelling = 'ERROR ' + message(e);
+	}
 	return value;
 }
 

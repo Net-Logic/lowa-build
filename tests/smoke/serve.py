@@ -1,5 +1,6 @@
 """Serve the smoke page, the samples and an engine directory with the headers LOWA needs.
-Usage: python3 -I tests/smoke/serve.py <engine-dir> [port]   (page at http://127.0.0.1:<port>/)"""
+Usage: python3 -I tests/smoke/serve.py <engine-dir> [port] [hunspell-dir]   (page at http://127.0.0.1:<port>/)
+hunspell-dir: .dic/.aff files served under /dicts/ (for the dicts=1 query parameter)"""
 import http.server
 import os
 import sys
@@ -7,6 +8,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENGINE = os.path.abspath(sys.argv[1])
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
+DICTS = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else None
 TYPES = {'.js': 'text/javascript', '.wasm': 'application/wasm', '.metadata': 'application/json', '.data': 'application/octet-stream'}
 
 
@@ -15,6 +17,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         name = os.path.basename(path.split('?', 1)[0])
         if path.startswith('/engine/'):
             return os.path.join(ENGINE, name)
+        if path.startswith('/dicts/') and DICTS:
+            return os.path.join(DICTS, name)
         if path.startswith('/samples/'):
             return os.path.join(HERE, 'samples', name)
         return os.path.join(HERE, 'www', name or 'index.html')

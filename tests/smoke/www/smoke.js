@@ -17,6 +17,17 @@
 	if (params.get('lang')) {
 		Module.preRun.push(() => { ENV.LANG = params.get('lang') + '.UTF-8'; });
 	}
+	// dicts=1: Hunspell files in the system dictionary directory of the build, before LibreOffice starts
+	const dicts = params.get('dicts') === '1' ? ['en_US.dic', 'en_US.aff', 'fr.dic', 'fr.aff'] : [];
+	const dictData = {};
+	if (dicts.length) {
+		Module.preRun.push(() => {
+			FS.mkdirTree('/usr/share/hunspell');
+			for (const name of dicts) {
+				FS.writeFile('/usr/share/hunspell/' + name.replace(/^fr\./, 'fr_FR.'), dictData[name]);
+			}
+		});
+	}
 	if (params.get('ui')) {
 		Module.preRun.push(() => { ENV.LC_MESSAGES = params.get('ui') + '.UTF-8'; });
 	}
@@ -64,5 +75,6 @@
 			};
 		});
 	};
-	document.body.appendChild(script);
+	Promise.all(dicts.map((name) => fetch(abs('dicts/' + name)).then((r) => r.arrayBuffer()).then((b) => { dictData[name] = new Uint8Array(b); })))
+		.then(() => document.body.appendChild(script));
 })();
