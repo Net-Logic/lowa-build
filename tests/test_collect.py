@@ -97,6 +97,22 @@ class DictsTest(unittest.TestCase):
         self.assertEqual(collect.link_names('hyphen/hyph_de_DE.dic', 'de-DE', ['de-DE', 'de']), ['hyph_de.dic'])
         self.assertEqual(collect.link_names('hunspell/de_DE.aff', 'de-DE', ['de-DE']), [])
 
+    def test_link_names_replace_the_locale_suffix_only(self):
+        # A name holding the main locale twice: only the locale before the extension is replaced
+        self.assertEqual(collect.link_names('hyphen/hyph_fr_FR_fr_FR.dic', 'fr-FR', ['fr-FR', 'fr-BE']), ['hyph_fr_FR_fr_BE.dic'])
+
+    def test_repeated_locale_gives_one_link(self):
+        root, out = tempfile.mkdtemp(), tempfile.mkdtemp()
+        make_tree(root)
+        xcu = os.path.join(root, 'it_IT', 'dictionaries.xcu')
+        with open(xcu) as f:
+            text = f.read()
+        with open(xcu, 'w') as f:
+            f.write(text.replace('<value>it-IT it-CH</value>', '<value>it-IT it-CH it-CH it-IT</value>'))
+        it = next(e for e in collect.collect_dicts(root, out) if e['name'] == 'hunspell/it_IT.dic')
+        self.assertEqual(it['locales'], ['it-IT', 'it-CH'])
+        self.assertEqual(it['links'], ['it_CH.dic'])
+
     def test_collect_dicts(self):
         root, out = tempfile.mkdtemp(), tempfile.mkdtemp()
         make_tree(root)

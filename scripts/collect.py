@@ -97,9 +97,11 @@ def xcu_locales(xcu_path, file_name):
 
 def link_names(target, main_locale, locales):
     """Extra file names (symbolic links in the engine) for the other locales of a file named after its main locale"""
-    base = os.path.basename(target)
+    stem, ext = os.path.splitext(os.path.basename(target))
     main = main_locale.replace('-', '_')
-    return [base.replace(main, loc.replace('-', '_')) for loc in locales if loc != main_locale]
+    if not stem.endswith(main):
+        sys.exit('%s is not named after its main locale %s' % (target, main_locale))
+    return [stem[:-len(main)] + loc.replace('-', '_') + ext for loc in locales if loc != main_locale]
 
 
 def collect_dicts(dict_root, out):
@@ -113,7 +115,8 @@ def collect_dicts(dict_root, out):
         locales = xcu_locales(os.path.join(dict_root, folder, 'dictionaries.xcu'), os.path.basename(source))
         if main_locale not in locales:
             sys.exit('%s: %s not in the locales of %s/dictionaries.xcu (%s)' % (source, main_locale, folder, ' '.join(locales)))
-        locales = [main_locale] + [loc for loc in locales if loc != main_locale]
+        # Main locale first, each locale once (an xcu may repeat one)
+        locales = list(dict.fromkeys([main_locale] + locales))
         dest = os.path.join(out, 'dicts', target)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(path, dest)
