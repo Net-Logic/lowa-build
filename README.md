@@ -29,7 +29,8 @@ Steps can be run alone: `image`, `fetch`, `qt`, `lo`, `collect`. Every heavy ste
 machine, and the LibreOffice step resumes once with a single job. The build stops itself below `STOP_BELOW_DISK_GB`
 free disk. Memory peaks are sampled every 30 s from the container's cgroup.
 
-Output: `out/<LO_VERSION>-nl<BUILD_NUMBER>/` — the four engine files, `build-info.json`, `licenses/`.
+Output: `out/<LO_VERSION>-nl<BUILD_NUMBER>/` — the four engine files, `build-info.json`, `licenses/`, and the
+spelling and hyphenation dictionaries in `dicts/` (see Dictionaries).
 Into the module: `htdocs/custom/odteditor/dev/update-engine.sh --local out/<label>`.
 
 | File | Raw | Brotli |
