@@ -52,18 +52,40 @@ function probe(ctx, writerDoc) {
 		value.charLocale = 'ERROR ' + message(e);
 	}
 	try {
-		// The dispatcher's isValid is ambiguous for zetajs (XSpellChecker1::isValid takes a short): ask it for the
-		// locales only, and check words with the Hunspell service, which implements XSpellChecker alone
+		// Through the dispatcher, as Writer does. zetajs resolves its isValid to XSpellChecker1::isValid, which takes
+		// a LanguageType (Windows LCID) instead of a Locale
+		const LCID = {'en-US': 1033, 'en-GB': 2057, 'fr-FR': 1036, 'fr-BE': 2060, 'fr-CH': 4108, 'de-DE': 1031,
+			'de-CH': 2055, 'es-ES': 3082, 'es-MX': 2058, 'it-IT': 1040, 'it-CH': 2064};
+		const WORDS = {en: ['hello', 'helo'], fr: ['bonjour', 'bonjuor'], de: ['Haus', 'Huas'], es: ['casa', 'csaa'], it: ['ciao', 'ciaoo']};
 		const dispatcher = css.linguistic2.LinguServiceManager.create(ctx).getSpellChecker();
-		const spell = ctx.getServiceManager().createInstanceWithContext('org.openoffice.lingu.MySpellSpellChecker', ctx);
-		const check = (word, lang, country) => spell.isValid(word, new css.lang.Locale({Language: lang, Country: country, Variant: ''}), []);
+		const checks = {};
+		for (const [loc, lcid] of Object.entries(LCID)) {
+			const [good, bad] = WORDS[loc.split('-')[0]];
+			checks[loc] = {valid: dispatcher.isValid(good, lcid, []), rejected: !dispatcher.isValid(bad, lcid, [])};
+		}
 		value.spelling = {
 			locales: zetajs.fromAny(dispatcher.getLocales()).map((l) => l.Language + '-' + l.Country).join(' '),
-			'fr bonjour': check('bonjour', 'fr', 'FR'), 'fr bonjuor': check('bonjuor', 'fr', 'FR'),
-			'en hello': check('hello', 'en', 'US'), 'en helo': check('helo', 'en', 'US'),
+			checks: checks,
 		};
 	} catch (e) {
 		value.spelling = 'ERROR ' + message(e);
+	}
+	try {
+		const hyph = css.linguistic2.LinguServiceManager.create(ctx).getHyphenator();
+		const WORDS = {'en-US': 'hyphenation', 'fr-FR': 'anticonstitutionnellement', 'de-DE': 'Donaudampfschifffahrt',
+			'es-ES': 'electroencefalografista', 'es-MX': 'electroencefalografista', 'it-IT': 'precipitevolissimevolmente'};
+		const words = {};
+		for (const [loc, word] of Object.entries(WORDS)) {
+			const [lang, country] = loc.split('-');
+			const res = hyph.hyphenate(word, new css.lang.Locale({Language: lang, Country: country, Variant: ''}), word.length - 2, []);
+			words[loc] = res ? res.getHyphenPos() : null;
+		}
+		value.hyphenation = {
+			locales: zetajs.fromAny(hyph.getLocales()).map((l) => l.Language + '-' + l.Country).join(' '),
+			words: words,
+		};
+	} catch (e) {
+		value.hyphenation = 'ERROR ' + message(e);
 	}
 	return value;
 }

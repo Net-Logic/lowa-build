@@ -8,15 +8,41 @@ import glob
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 import brotli
 
 ENGINE_FILES = ['soffice.js', 'soffice.wasm', 'soffice.data', 'soffice.data.js.metadata']
 # .mo files every UI language must have (Writer, Calc, Impress and the shared UI)
 REQUIRED_MO = ['sw', 'sc', 'sd', 'svx', 'cui', 'sfx', 'vcl', 'svt']
+# Spelling (.dic and .aff) and hyphenation files shipped with the engine: (target under dicts/, source under the
+# dictionaries folder of the LibreOffice sources, main locale). The target is named after the main locale, because
+# LibreOffice takes the locale of a system dictionary from its file name and matches it exactly.
+DICT_FILES = [
+    ('hunspell/en_US.aff', 'en/en_US.aff', 'en-US'),
+    ('hunspell/en_US.dic', 'en/en_US.dic', 'en-US'),
+    ('hunspell/fr_FR.aff', 'fr_FR/dictionaries/fr.aff', 'fr-FR'),
+    ('hunspell/fr_FR.dic', 'fr_FR/dictionaries/fr.dic', 'fr-FR'),
+    ('hunspell/de_DE.aff', 'de/de_DE_frami.aff', 'de-DE'),
+    ('hunspell/de_DE.dic', 'de/de_DE_frami.dic', 'de-DE'),
+    ('hunspell/es_ES.aff', 'es/es_ES.aff', 'es-ES'),
+    ('hunspell/es_ES.dic', 'es/es_ES.dic', 'es-ES'),
+    ('hunspell/it_IT.aff', 'it_IT/it_IT.aff', 'it-IT'),
+    ('hunspell/it_IT.dic', 'it_IT/it_IT.dic', 'it-IT'),
+    ('hyphen/hyph_en_US.dic', 'en/hyph_en_US.dic', 'en-US'),
+    ('hyphen/hyph_fr_FR.dic', 'fr_FR/dictionaries/hyph_fr.dic', 'fr-FR'),
+    ('hyphen/hyph_de_DE.dic', 'de/hyph_de_DE.dic', 'de-DE'),
+    ('hyphen/hyph_es_ES.dic', 'es/hyph_es.dic', 'es-ES'),
+    ('hyphen/hyph_it_IT.dic', 'it_IT/hyph_it_IT.dic', 'it-IT'),
+]
+# Licence folder of each source folder
+DICT_LICENSE_DIRS = {'en': 'en', 'fr_FR': 'fr', 'de': 'de', 'es': 'es', 'it_IT': 'it'}
+DICT_LICENSE_FILES = re.compile(r'^(README.*|COPYING.*|LICENSE.*|license\.txt)$')
+OOR = '{http://openoffice.org/2001/registry}'
 
 
 def parse_env(path):
@@ -60,6 +86,49 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def xcu_locales(xcu_path, file_name):
+    """Locales that a dictionaries.xcu gives to a dictionary file (the node whose Locations names the file)"""
+    for node in ET.parse(xcu_path).iter('node'):
+        props = {p.get(OOR + 'name'): (p.findtext('value') or '').split() for p in node.findall('prop')}
+        if any(loc.rsplit('/', 1)[-1] == file_name for loc in props.get('Locations', [])):
+            return props.get('Locales', [])
+    return []
+
+
+def link_names(target, main_locale, locales):
+    """Extra file names (symbolic links in the engine) for the other locales of a file named after its main locale"""
+    base = os.path.basename(target)
+    main = main_locale.replace('-', '_')
+    return [base.replace(main, loc.replace('-', '_')) for loc in locales if loc != main_locale]
+
+
+def collect_dicts(dict_root, out):
+    """Copy the dictionaries and their licences to out/dicts and out/licenses/dictionaries; their build-info entries"""
+    entries = []
+    for target, source, main_locale in DICT_FILES:
+        path = os.path.join(dict_root, source)
+        if not os.path.isfile(path):
+            sys.exit('Missing dictionary file: ' + path)
+        folder = source.split('/')[0]
+        locales = xcu_locales(os.path.join(dict_root, folder, 'dictionaries.xcu'), os.path.basename(source))
+        if main_locale not in locales:
+            sys.exit('%s: %s not in the locales of %s/dictionaries.xcu (%s)' % (source, main_locale, folder, ' '.join(locales)))
+        locales = [main_locale] + [loc for loc in locales if loc != main_locale]
+        dest = os.path.join(out, 'dicts', target)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copyfile(path, dest)
+        entries.append({'name': target, 'source': source, 'locales': locales,
+                        'links': link_names(target, main_locale, locales),
+                        'raw': os.path.getsize(dest), 'br': brotli_size(dest), 'sha256': sha256_file(dest)})
+    for source_dir in sorted({os.path.dirname(s) for _, s, _ in DICT_FILES}):
+        licenses = os.path.join(out, 'licenses', 'dictionaries', DICT_LICENSE_DIRS[source_dir.split('/')[0]])
+        os.makedirs(licenses, exist_ok=True)
+        for name in sorted(os.listdir(os.path.join(dict_root, source_dir))):
+            if DICT_LICENSE_FILES.match(name) and os.path.isfile(os.path.join(dict_root, source_dir, name)):
+                shutil.copyfile(os.path.join(dict_root, source_dir, name), os.path.join(licenses, name))
+    return entries
+
+
 def main(repo, work, out):
     env = parse_env(os.path.join(repo, 'versions.env'))
     src = os.path.join(work, 'src', 'libreoffice-' + env['LO_VERSION'])
@@ -92,6 +161,7 @@ def main(repo, work, out):
         if not os.path.isfile(path):
             sys.exit('Missing licence file: ' + path)
         shutil.copyfile(path, os.path.join(out, 'licenses', dest))
+    dicts = collect_dicts(os.path.join(src, 'dictionaries'), out)
 
     stats = {}
     for path in sorted(glob.glob(os.path.join(work, 'stats', '*.json'))):
@@ -116,6 +186,7 @@ def main(repo, work, out):
         'autogen_input': autogen_input,
         'langs': langs,
         'files': {n: {'raw': os.path.getsize(os.path.join(out, n)), 'br': brotli_size(os.path.join(out, n))} for n in ENGINE_FILES},
+        'dicts': dicts,
         'stats': stats,
     }
     with open(os.path.join(out, 'build-info.json'), 'w') as f:
@@ -123,6 +194,7 @@ def main(repo, work, out):
         f.write('\n')
     for n in ENGINE_FILES:
         print('%-26s raw %12d  br %12d' % (n, info['files'][n]['raw'], info['files'][n]['br']))
+    print('%-26s raw %12d  br %12d  (%d files)' % ('dictionaries', sum(d['raw'] for d in dicts), sum(d['br'] for d in dicts), len(dicts)))
 
 
 if __name__ == '__main__':

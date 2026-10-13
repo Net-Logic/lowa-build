@@ -1,6 +1,6 @@
 """Serve the smoke page, the samples and an engine directory with the headers LOWA needs.
-Usage: python3 -I tests/smoke/serve.py <engine-dir> [port] [hunspell-dir]   (page at http://127.0.0.1:<port>/)
-hunspell-dir: .dic/.aff files served under /dicts/ (for the dicts=1 query parameter)"""
+Usage: python3 -I tests/smoke/serve.py <engine-dir> [port]   (page at http://127.0.0.1:<port>/)
+The engine directory is served under /engine/, with its sub-folders (dicts/hunspell/…)."""
 import http.server
 import os
 import sys
@@ -8,17 +8,19 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENGINE = os.path.abspath(sys.argv[1])
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
-DICTS = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else None
-TYPES = {'.js': 'text/javascript', '.wasm': 'application/wasm', '.metadata': 'application/json', '.data': 'application/octet-stream'}
+TYPES = {'.js': 'text/javascript', '.wasm': 'application/wasm', '.metadata': 'application/json', '.data': 'application/octet-stream',
+         '.dic': 'application/octet-stream', '.aff': 'application/octet-stream'}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
-        name = os.path.basename(path.split('?', 1)[0])
+        path = path.split('?', 1)[0]
         if path.startswith('/engine/'):
-            return os.path.join(ENGINE, name)
-        if path.startswith('/dicts/') and DICTS:
-            return os.path.join(DICTS, name)
+            rel = os.path.normpath(path[len('/engine/'):])
+            if rel.startswith('..') or os.path.isabs(rel):
+                return os.path.join(ENGINE, '.missing')
+            return os.path.join(ENGINE, rel)
+        name = os.path.basename(path)
         if path.startswith('/samples/'):
             return os.path.join(HERE, 'samples', name)
         return os.path.join(HERE, 'www', name or 'index.html')
