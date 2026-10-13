@@ -52,9 +52,13 @@ function probe(ctx, writerDoc) {
 		value.charLocale = 'ERROR ' + message(e);
 	}
 	try {
-		const spell = css.linguistic2.LinguServiceManager.create(ctx).getSpellChecker();
+		// The dispatcher's isValid is ambiguous for zetajs (XSpellChecker1::isValid takes a short): ask it for the
+		// locales only, and check words with the Hunspell service, which implements XSpellChecker alone
+		const dispatcher = css.linguistic2.LinguServiceManager.create(ctx).getSpellChecker();
+		const spell = ctx.getServiceManager().createInstanceWithContext('org.openoffice.lingu.MySpellSpellChecker', ctx);
 		const check = (word, lang, country) => spell.isValid(word, new css.lang.Locale({Language: lang, Country: country, Variant: ''}), []);
 		value.spelling = {
+			locales: zetajs.fromAny(dispatcher.getLocales()).map((l) => l.Language + '-' + l.Country).join(' '),
 			'fr bonjour': check('bonjour', 'fr', 'FR'), 'fr bonjuor': check('bonjuor', 'fr', 'FR'),
 			'en hello': check('hello', 'en', 'US'), 'en helo': check('helo', 'en', 'US'),
 		};
