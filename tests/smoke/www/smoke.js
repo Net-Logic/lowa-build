@@ -17,15 +17,21 @@
 	if (params.get('lang')) {
 		Module.preRun.push(() => { ENV.LANG = params.get('lang') + '.UTF-8'; });
 	}
-	// dicts=1: Hunspell files in the system dictionary directory of the build, before LibreOffice starts
-	const dicts = params.get('dicts') === '1' ? ['en_US.dic', 'en_US.aff', 'fr.dic', 'fr.aff'] : [];
+	// dicts=1: the dictionaries of the build (build-info.json), written to LibreOffice's system folders before it
+	// starts, with a symbolic link per extra locale — as the module does
+	const useDicts = params.get('dicts') === '1';
+	let dicts = [];
 	const dictData = {};
-	if (dicts.length) {
+	if (useDicts) {
 		Module.preRun.push(() => {
-			FS.mkdirTree('/usr/share/hunspell');
-			for (const name of dicts) {
-				FS.writeFile('/usr/share/hunspell/' + name.replace(/^fr\./, 'fr_FR.'), dictData[name]);
+			for (const d of dicts) {
+				const [folder, file] = d.name.split('/');
+				const dir = '/usr/share/' + folder;
+				FS.mkdirTree(dir);
+				FS.writeFile(dir + '/' + file, dictData[d.name]);
+				d.links.forEach((link) => FS.symlink(file, dir + '/' + link));
 			}
+			SMOKE.dicts = dicts.length;
 		});
 	}
 	if (params.get('ui')) {
@@ -75,6 +81,11 @@
 			};
 		});
 	};
-	Promise.all(dicts.map((name) => fetch(abs('dicts/' + name)).then((r) => r.arrayBuffer()).then((b) => { dictData[name] = new Uint8Array(b); })))
-		.then(() => document.body.appendChild(script));
+	const loadDicts = useDicts
+		? fetch(abs('engine/build-info.json')).then((r) => r.json()).then((info) => {
+			dicts = info.dicts || [];
+			return Promise.all(dicts.map((d) => fetch(abs('engine/dicts/' + d.name)).then((r) => r.arrayBuffer()).then((b) => { dictData[d.name] = new Uint8Array(b); })));
+		})
+		: Promise.resolve();
+	loadDicts.then(() => document.body.appendChild(script));
 })();

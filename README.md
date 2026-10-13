@@ -59,9 +59,18 @@ Change `LO_VERSION`, `LO_COMMIT`, `LO_SRC_URL`, `LO_TARBALLS`; check `static/REA
 the emsdk and Qt versions (`EMSDK_*`, `QT*_COMMIT`); download and pin `checksums.sha256`; set `BUILD_NUMBER=1`;
 run `./build.sh`. If `patches/core/` no longer applies, `fetch` stops: update the patch against the new file.
 
-## Dictionaries (not included)
+## Dictionaries
 
-The engine has no spell-checking dictionaries. Measured on LibreOffice 26.8.1.1's dictionaries
+The build output holds the spelling and hyphenation dictionaries of the main variant of the five languages, from
+`libreoffice-dictionaries-<version>.tar.xz` (`collect`, `out/<label>/dicts/`, licences in
+`out/<label>/licenses/dictionaries/`): `hunspell/{en_US,fr_FR,de_DE,es_ES,it_IT}.{dic,aff}` and
+`hyphen/hyph_{en_US,fr_FR,de_DE,es_ES,it_IT}.dic`, 9.9 MB raw, 2.2 MB Brotli. LibreOffice takes the locale of such a
+file from its name and matches it exactly, so each file is named after its main locale and `build-info.json` lists,
+per file, the other locales of the upstream `dictionaries.xcu` as `links`: the module creates them as symbolic links
+(`fr_BE.dic` → `fr_FR.dic`). Not covered (other upstream dictionaries): en-GB, en-AU, en-CA, en-ZA, de-AT, de-CH and
+the Latin American Spanish spelling (their hyphenation is covered). Thesaurus: not shipped.
+
+Sizes of all the dictionaries of these languages, measured on LibreOffice 26.8.1.1's dictionaries
 (`scripts/measure-dicts.py`), Brotli as the module stores the engine:
 
 | Language | Spelling only (main variant) raw | Brotli | Everything (variants, hyphenation, thesaurus) raw | Brotli |
@@ -75,20 +84,14 @@ The engine has no spell-checking dictionaries. Measured on LibreOffice 26.8.1.1'
 
 The raw size matters too: the engine's file system lives in browser memory.
 
-Feasibility: LibreOffice packages dictionaries as extensions, and the WebAssembly configuration disables
-extensions (`--enable-wasm-strip` sets `enable_extensions=no`). But its Hunspell spell checker also reads plain
-`.dic`/`.aff` files from "system" paths, which configure enables for Emscripten ("whether to use dicts from external
-paths... yes", directory `file:///usr/share/hunspell`), and from the `DICPATH` environment variable
-(`lingucomponent/source/lingutil/lingutil.cxx`). So dictionaries can be written into the engine's file system before
-LibreOffice starts, without rebuilding the engine.
+LibreOffice packages dictionaries as extensions, which the WebAssembly build disables, but its spell checker and
+hyphenator also read plain files from the system folders that configure sets for Emscripten (`DICT_SYSTEM_DIR`
+`/usr/share/hunspell`, `HYPH_SYSTEM_DIR` `/usr/share/hyphen`): the files are written there before LibreOffice starts.
 
-Runtime check on 26.8.1.1-nl1: the smoke page's `dicts=1` writes `en_US.dic/.aff` and `fr.dic/.aff` to
-`/usr/share/hunspell` in `preRun`. The spell checker then lists the locales `en-US fr-FR` (none without them) and
-accepts "hello" and "bonjour" but rejects "helo" and "bonjuor"; start-up time does not change measurably. To try it,
-give `serve.py` a folder holding those four files as a third argument:
-
-    python3 -I tests/smoke/serve.py out/<label> 8766 <folder> &
-    node tests/smoke/run.mjs http://127.0.0.1:8766 'files=odt&dicts=1' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["probe"]["spelling"])'
+Smoke test: `node tests/smoke/run.mjs http://127.0.0.1:8766 'files=odt&dicts=1'` loads the dictionaries of the
+served build; the probe lists the locales and checks one word per locale and the hyphenation of a long word.
+Start-up (median of 3, 26.8.1.1-nl2): ready 4876 ms with the dictionaries, 4860 ms without. Opening the 7 sample
+documents (French text) takes longer once the French dictionary is in use: 12.6 s instead of 9.7 s.
 
 ## Licences
 
