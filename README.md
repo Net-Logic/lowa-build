@@ -96,5 +96,5 @@ LibreOffice: MPL-2.0. Qt for WebAssembly: the wasm platform plugin is GPLv3 (or 
 LGPLv3/GPL; it is statically linked, so the engine as a whole is conveyed under GPLv3 and its complete source
 (this repository, the pinned sources, `patches/`) must be offered with it. Emscripten runtime: MIT / University of
 Illinois NCSA; libc++, libc++abi, compiler-rt: Apache-2.0 with LLVM exception; musl: MIT; dlmalloc: public domain.
-Fonts: see LibreOffice's licence file in `out/<label>/licenses/`. This repository's own scripts: GPLv3 or later;
-`patches/core/*`: MPL-2.0.
+Fonts: see LibreOffice's licence file in `out/<label>/licenses/`. This repository's own scripts: GPLv3 or later
+(`COPYING`); `patches/core/*`: MPL-2.0; `tests/smoke/www/zeta.js` (zetajs): MIT.
