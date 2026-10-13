@@ -6,12 +6,13 @@ every other language of the build. Licence of this patch: MPL-2.0, as the file i
 
 --- a/static/CustomTarget_emscripten_fs_image.mk	2026-10-12 21:25:07.872691309 +0200
 +++ b/static/CustomTarget_emscripten_fs_image.mk	2026-10-12 21:25:07.874691318 +0200
-@@ -1770,6 +1770,20 @@
+@@ -1770,6 +1770,21 @@
  
  endif # !ENABLE_WASM_STRIP_CHART
  
-+# lowa-build: UI languages other than en-US. Upstream packages en-US only.
-+lowa_fs_image_langs := $(filter-out en-US,$(gb_Configuration_LANGS))
++# lowa-build: UI languages other than en-US (and qtz, the string-ID pseudo-language that
++# non-release builds add to --with-lang). Upstream packages en-US only.
++lowa_fs_image_langs := $(filter-out en-US qtz,$(gb_Configuration_LANGS))
 +
 +gb_emscripten_fs_image_files += \
 +    $(foreach lang,$(lowa_fs_image_langs), \
@@ -27,7 +28,7 @@ every other language of the build. Licence of this patch: MPL-2.0, as the file i
  $(foreach theme,$(WITH_THEMES), \
      $(eval gb_emscripten_fs_image_files += $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/images_$(theme).zip))
  
-@@ -1805,10 +1819,11 @@
+@@ -1805,10 +1820,11 @@
  	    $(shell cat $(call gb_Package_get_target,$(list)) >> $@.tmp))
  	$(shell mv $@.tmp $@)
  
