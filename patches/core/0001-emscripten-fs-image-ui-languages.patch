@@ -1,0 +1,43 @@
+lowa-build: package the UI languages of --with-lang in soffice.data
+
+Upstream static/CustomTarget_emscripten_fs_image.mk lists the en-US language files only,
+so every LOWA build had an English-only UI. Adds the registry files and the .mo files of
+every other language of the build. Licence of this patch: MPL-2.0, as the file it changes.
+
+--- a/static/CustomTarget_emscripten_fs_image.mk	2026-10-12 21:25:07.872691309 +0200
++++ b/static/CustomTarget_emscripten_fs_image.mk	2026-10-12 21:25:07.874691318 +0200
+@@ -1770,6 +1770,21 @@
+ 
+ endif # !ENABLE_WASM_STRIP_CHART
+ 
++# lowa-build: UI languages other than en-US (and qtz, the string-ID pseudo-language that
++# non-release builds add to --with-lang). Upstream packages en-US only.
++lowa_fs_image_langs := $(filter-out en-US qtz,$(gb_Configuration_LANGS))
++
++gb_emscripten_fs_image_files += \
++    $(foreach lang,$(lowa_fs_image_langs), \
++        $(INSTROOT)/$(LIBO_SHARE_FOLDER)/registry/Langpack-$(lang).xcd \
++        $(INSTROOT)/$(LIBO_SHARE_FOLDER)/registry/res/fcfg_langpack_$(lang).xcd \
++        $(INSTROOT)/$(LIBO_SHARE_FOLDER)/registry/res/registry_$(lang).xcd)
++
++# The set of .mo files depends on the modules built: list them when the file list is written,
++# after every AllLangMoTarget is installed (Postprocess AllResources)
++lowa_fs_image_mo_files = $(foreach lang,$(gb_AllLangMoTarget_LANGS), \
++    $(wildcard $(call gb_MoTarget_get_install_target,$(shell $(SRCDIR)/solenv/bin/localestr $(lang))/LC_MESSAGES/*)))
++
+ $(foreach theme,$(WITH_THEMES), \
+     $(eval gb_emscripten_fs_image_files += $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/images_$(theme).zip))
+ 
+@@ -1805,10 +1820,11 @@
+ 	    $(shell cat $(call gb_Package_get_target,$(list)) >> $@.tmp))
+ 	$(shell mv $@.tmp $@)
+ 
+-gb_emscripten_fs_image_all_files = $(gb_emscripten_fs_image_files) $(shell cat $(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists)
++gb_emscripten_fs_image_all_files = $(gb_emscripten_fs_image_files) $(shell cat $(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists) $(lowa_fs_image_mo_files)
+ 
+ .PHONY: $(emscripten_fs_image_WORKDIR)/soffice.data.filelist
+ $(emscripten_fs_image_WORKDIR)/soffice.data.filelist: \
++		$(call gb_Postprocess_get_target,AllResources) \
+ 		$(call gb_InstallModule_get_target,scp2/ooo) \
+ 		$(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists \
+ 		$(gb_emscripten_fs_image_files) \
