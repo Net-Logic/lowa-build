@@ -42,6 +42,9 @@ DICT_FILES = [
 # Licence folder of each source folder
 DICT_LICENSE_DIRS = {'en': 'en', 'fr_FR': 'fr', 'de': 'de', 'es': 'es', 'it_IT': 'it'}
 DICT_LICENSE_FILES = re.compile(r'^(README.*|COPYING.*|LICENSE.*|license\.txt)$')
+# Licence texts a language needs but its source folder lacks: the French (LGPL 2.1 or later) and Italian (LGPL)
+# hyphenation patterns; the LGPL 2.1 text ships in the German folder only
+DICT_EXTRA_LICENSES = {'fr': ['de/COPYING_LGPL_v2.1.txt'], 'it': ['de/COPYING_LGPL_v2.1.txt']}
 OOR = '{http://openoffice.org/2001/registry}'
 
 
@@ -129,6 +132,12 @@ def collect_dicts(dict_root, out):
         for name in sorted(os.listdir(os.path.join(dict_root, source_dir))):
             if DICT_LICENSE_FILES.match(name) and os.path.isfile(os.path.join(dict_root, source_dir, name)):
                 shutil.copyfile(os.path.join(dict_root, source_dir, name), os.path.join(licenses, name))
+    for lang, sources in DICT_EXTRA_LICENSES.items():
+        for source in sources:
+            path = os.path.join(dict_root, source)
+            if not os.path.isfile(path):
+                sys.exit('Missing licence file: ' + path)
+            shutil.copyfile(path, os.path.join(out, 'licenses', 'dictionaries', lang, os.path.basename(source)))
     return entries
 
 

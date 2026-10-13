@@ -61,7 +61,7 @@ TREE = {
               ['dictionaries/fr.aff', 'dictionaries/fr.dic', 'dictionaries/hyph_fr.dic', 'dictionaries/README_dict_fr.txt']),
     'de': ([('HunSpellDic_de_DE', '%origin%/de_DE_frami.aff %origin%/de_DE_frami.dic', 'DICT_SPELL', 'de-DE'),
             ('HyphDic_de_DE', '%origin%/hyph_de_DE.dic', 'DICT_HYPH', 'de de-DE')],
-           ['de_DE_frami.aff', 'de_DE_frami.dic', 'hyph_de_DE.dic', 'COPYING_GPLv3', 'README_hyph_de.txt']),
+           ['de_DE_frami.aff', 'de_DE_frami.dic', 'hyph_de_DE.dic', 'COPYING_GPLv3', 'COPYING_LGPL_v2.1.txt', 'README_hyph_de.txt']),
     'es': ([('HunSpellDic_es_ES', '%origin%/es_ES.aff %origin%/es_ES.dic', 'DICT_SPELL', 'es-ES'),
             ('HyphDic_es', '%origin%/hyph_es.dic', 'DICT_HYPH', 'es-AR es-ES es-MX')],
            ['es_ES.aff', 'es_ES.dic', 'hyph_es.dic', 'LICENSE.md']),
@@ -134,6 +134,15 @@ class DictsTest(unittest.TestCase):
         self.assertEqual(es['links'], ['hyph_es_AR.dic', 'hyph_es_MX.dic'])
         for lang, name in [('en', 'license.txt'), ('fr', 'README_dict_fr.txt'), ('de', 'COPYING_GPLv3'), ('es', 'LICENSE.md'), ('it', 'README_it_IT.txt')]:
             self.assertTrue(os.path.isfile(os.path.join(out, 'licenses', 'dictionaries', lang, name)), lang + '/' + name)
+
+    def test_lgpl_text_in_each_lgpl_language(self):
+        # The French and Italian hyphenation patterns are LGPL: the text goes with them, not only with German
+        root, out = tempfile.mkdtemp(), tempfile.mkdtemp()
+        make_tree(root)
+        collect.collect_dicts(root, out)
+        for lang in ('de', 'fr', 'it'):
+            with open(os.path.join(out, 'licenses', 'dictionaries', lang, 'COPYING_LGPL_v2.1.txt')) as f:
+                self.assertEqual(f.read(), 'de COPYING_LGPL_v2.1.txt\n' * 50, lang)
 
     def test_main_locale_first_and_links(self):
         root, out = tempfile.mkdtemp(), tempfile.mkdtemp()
